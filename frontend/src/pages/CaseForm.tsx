@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { clsx } from 'clsx';
 import { Timeline } from '../components/Timeline';
 import { TimelineModal } from '../components/ui/TimelineModal';
+import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 
 interface CaseFormData {
     codigo?: string;
@@ -16,7 +17,7 @@ interface CaseFormData {
     prioridad: string;
     estado: string;
     sby_responsable: string;
-    novedades_y_comentarios: string;
+    motivo: string;
     observaciones: string;
 }
 
@@ -25,6 +26,7 @@ export default function CaseForm() {
     const navigate = useNavigate();
     const isEdit = !!id;
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
     const { register, handleSubmit, setValue, formState: { errors } } = useForm<CaseFormData>();
     const queryClient = useQueryClient();
     const { showToast } = useToast();
@@ -32,6 +34,7 @@ export default function CaseForm() {
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
     const currentUserId = user?.id;
+    const isAdmin = user?.rol === 'ADMIN';
 
     // Fetch Timeline
     const { data: timeline = [] } = useQuery({
@@ -65,7 +68,7 @@ export default function CaseForm() {
             setValue('prioridad', caseData.prioridad);
             setValue('estado', caseData.estado);
             setValue('sby_responsable', caseData.sby_responsable || '');
-            setValue('novedades_y_comentarios', caseData.novedades_y_comentarios || '');
+            setValue('motivo', caseData.motivo || '');
             // setExistingObservations(caseData.observaciones || '');
             // Observations are handled by timeline query now
         }
@@ -99,6 +102,28 @@ export default function CaseForm() {
         }
     });
 
+    const deleteCaseMutation = useMutation({
+        mutationFn: () => api.delete(`/cases/${id}`),
+        onSuccess: async (response) => {
+            // Remover completamente las queries del cache para forzar un refetch
+            queryClient.removeQueries({ queryKey: ['cases'] });
+            queryClient.removeQueries({ queryKey: ['stats'] });
+            
+            showToast('success', 'Caso eliminado', response.data.message || 'El caso ha sido eliminado exitosamente.');
+            
+            // Navegar al dashboard
+            navigate('/');
+        },
+        onError: (error: any) => {
+            showToast('error', 'Error', error.response?.data?.detail || 'Error al eliminar el caso');
+        }
+    });
+
+    const handleDeleteCase = () => {
+        deleteCaseMutation.mutate();
+        setShowDeleteModal(false);
+    };
+
     // Refresh attachments after upload
     const handleUploadComplete = () => {
         queryClient.invalidateQueries({ queryKey: ['case', id] });
@@ -127,7 +152,7 @@ export default function CaseForm() {
     const loading = createCaseMutation.isPending || updateCaseMutation.isPending;
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex items-center gap-4">
                 <button
                     onClick={() => navigate('/')}
@@ -211,10 +236,10 @@ export default function CaseForm() {
 
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-vscode-text mb-2">
-                        Motivo <span className="text-slate-400 font-normal">(Novedades y comentarios)</span>
+                        Motivo
                     </label>
                     <textarea
-                        {...register('novedades_y_comentarios')}
+                        {...register('motivo')}
                         rows={4}
                         className="w-full rounded-lg border-slate-300 dark:border-vscode-border bg-slate-50 dark:bg-vscode-activity p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white font-mono text-sm"
                         placeholder="Descripción detallada del caso..."
@@ -306,7 +331,7 @@ export default function CaseForm() {
                                 <Maximize2 size={12} /> Ampliar
                             </button>
                         </label>
-                        <div className="w-full h-96 rounded-lg border border-slate-300 dark:border-vscode-border bg-slate-50/50 dark:bg-vscode-bg p-4 overflow-y-auto custom-scrollbar">
+                        <div className="w-full h-[40rem] rounded-lg border border-slate-300 dark:border-vscode-border bg-slate-50/50 dark:bg-vscode-bg p-4 overflow-y-auto custom-scrollbar">
                             <Timeline items={timeline} currentUserId={currentUserId} />
                         </div>
                     </div>
@@ -317,7 +342,7 @@ export default function CaseForm() {
                         </label>
                         <textarea
                             {...register('observaciones')}
-                            rows={6}
+                            rows={10}
                             className="w-full rounded-lg border-slate-300 dark:border-vscode-border bg-slate-50 dark:bg-vscode-activity p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
                             placeholder="Escriba una nueva observación para agregar al historial..."
                         />
@@ -327,24 +352,52 @@ export default function CaseForm() {
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-slate-200 dark:border-vscode-border">
-                    <button
-                        type="button"
-                        onClick={() => navigate('/')}
-                        className="px-6 py-2.5 border border-slate-300 dark:border-vscode-border text-slate-700 dark:text-vscode-text rounded-lg hover:bg-slate-50 dark:hover:bg-vscode-hover transition-colors font-medium"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium shadow-lg shadow-indigo-500/20"
-                    >
-                        <Save size={16} />
-                        {loading ? 'Guardando...' : 'Guardar Caso'}
-                    </button>
+                <div className="flex justify-between items-center gap-4 pt-4 border-t border-slate-200 dark:border-vscode-border">
+                    {/* Botón de eliminar (solo para admin en modo edición) */}
+                    {isEdit && isAdmin && (
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteModal(true)}
+                            disabled={deleteCaseMutation.isPending}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium shadow-lg shadow-red-500/20"
+                        >
+                            <Trash2 size={16} />
+                            {deleteCaseMutation.isPending ? 'Eliminando...' : 'Eliminar Caso'}
+                        </button>
+                    )}
+                    
+                    {/* Botones de acción principales */}
+                    <div className="flex gap-4 ml-auto">
+                        <button
+                            type="button"
+                            onClick={() => navigate('/')}
+                            className="px-6 py-2.5 border border-slate-300 dark:border-vscode-border text-slate-700 dark:text-vscode-text rounded-lg hover:bg-slate-50 dark:hover:bg-vscode-hover transition-colors font-medium"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium shadow-lg shadow-indigo-500/20"
+                        >
+                            <Save size={16} />
+                            {loading ? 'Guardando...' : 'Guardar Caso'}
+                        </button>
+                    </div>
                 </div>
             </form>
+
+            {/* Modal de confirmación de eliminación */}
+            <ConfirmationModal
+                isOpen={showDeleteModal}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirm={handleDeleteCase}
+                title="Eliminar Caso"
+                message={`¿Estás seguro de que deseas eliminar este caso? Esta acción no se puede deshacer y se eliminarán todas las observaciones y archivos adjuntos asociados.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+            />
 
             <TimelineModal
                 isOpen={isHistoryOpen}

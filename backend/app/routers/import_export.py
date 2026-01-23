@@ -123,7 +123,7 @@ async def import_cases_with_observations(
                 existing_case.prioridad = prioridad
                 existing_case.estado = estado
                 existing_case.sby_responsable = str(row.get('sby_responsable', ''))
-                existing_case.novedades_y_comentarios = str(row.get('novedades_y_comentarios', ''))
+                existing_case.motivo = str(row.get('motivo', ''))
                 existing_case.observaciones = str(row.get('observaciones', ''))
                 existing_case.fecha_inicio = fecha_inicio
                 existing_case.fecha_fin = fecha_fin
@@ -139,7 +139,7 @@ async def import_cases_with_observations(
                     servicio_o_plataforma=str(row['servicio_o_plataforma']),
                     prioridad=prioridad,
                     estado=estado,
-                    novedades_y_comentarios=str(row.get('novedades_y_comentarios', '')),
+                    motivo=str(row.get('motivo', '')),
                     sby_responsable=str(row.get('sby_responsable', '')),
                     observaciones=str(row.get('observaciones', '')),
                     creado_por_id=current_user.id,
@@ -477,7 +477,7 @@ async def import_legacy_cases(
                             prioridad=Priority.MEDIO,
                             estado=status_enum,
                             sby_responsable=resp,
-                            novedades_y_comentarios=desc,
+                            motivo=desc,
                             creado_por_id=admin_id,
                             fecha_inicio=date_val,
                             updated_at=date_val
@@ -531,7 +531,7 @@ async def export_cases_with_observations(
             'sby_responsable': case.sby_responsable or '',
             'fecha_inicio': case.fecha_inicio,
             'fecha_fin': case.fecha_fin,
-            'novedades_y_comentarios': case.novedades_y_comentarios or '',
+            'motivo': case.motivo or '',
             'observaciones': case.observaciones or '',
             'creado_por_id': case.creado_por_id,
             'created_at': case.created_at,
@@ -636,3 +636,434 @@ async def export_cases(
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+# ==========================================
+# IMPORTAR EXCEL COMPLETO (CASOS + OBSERVACIONES)
+# ==========================================
+@router.post("/import-complete-excel", status_code=201)
+async def import_complete_excel(
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+    current_user = Depends(get_current_user)
+):
+    """
+    Importa casos y observaciones desde un único archivo Excel con dos hojas:
+    - Hoja "Casos": Contiene todos los casos
+    - Hoja "Observaciones": Contiene las observaciones (opcional)
+    """
+    
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Formato de archivo inválido. Por favor suba un archivo Excel (.xlsx o .xls)")
+
+    contents = await file.read()
+    
+    try:
+        # Leer todas las hojas del Excel
+        excel_file = pd.ExcelFile(io.BytesIO(contents))
+        
+        if 'Casos' not in excel_file.sheet_names:
+            raise HTTPException(status_code=400, detail="El archivo Excel debe contener una hoja llamada 'Casos'")
+        
+        df_casos = pd.read_excel(excel_file, sheet_name='Casos')
+        
+        # Verificar si existe la hoja de observaciones
+        has_observations = 'Observaciones' in excel_file.sheet_names
+        df_observaciones = pd.read_excel(excel_file, sheet_name='Observaciones') if has_observations else None
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al parsear el archivo Excel: {str(e)}")
+
+    # Validar columnas requeridas para casos
+    required_cols_casos = ['codigo', 'servicio_o_plataforma', 'estado', 'prioridad']
+    missing_cols = [col for col in required_cols_casos if col not in df_casos.columns]
+    
+    if missing_cols:
+        raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en la hoja 'Casos': {', '.join(missing_cols)}")
+
+    df_casos.fillna('', inplace=True)
+
+    casos_importados = 0
+    casos_actualizados = 0
+    errores_casos = []
+    casos_map = {}  # Mapeo codigo -> case_id
+
+    print(f"\n📥 Importando {len(df_casos)} casos...")
+
+    for index, row in df_casos.iterrows():
+        try:
+            # Normalizar enums
+            try:
+                estado_str = str(row['estado']).upper().replace('CASESTATUS.', '')
+                estado = CaseStatus[estado_str]
+            except:
+                estado = CaseStatus.ABIERTO
+            
+            try:
+                prioridad_str = str(row['prioridad']).upper().replace('PRIORITY.', '')
+                prioridad = Priority[prioridad_str]
+            except:
+                prioridad = Priority.MEDIO
+
+            # Parsear fechas
+            fecha_inicio = row.get('fecha_inicio', datetime.utcnow())
+            if isinstance(fecha_inicio, str):
+                try:
+                    fecha_inicio = pd.to_datetime(fecha_inicio)
+                except:
+                    fecha_inicio = datetime.utcnow()
+            
+            fecha_fin = row.get('fecha_fin', None)
+            if fecha_fin and isinstance(fecha_fin, str) and fecha_fin.strip():
+                try:
+                    fecha_fin = pd.to_datetime(fecha_fin)
+                except:
+                    fecha_fin = None
+            else:
+                fecha_fin = None
+
+            created_at = row.get('created_at', fecha_inicio)
+            if isinstance(created_at, str):
+                try:
+                    created_at = pd.to_datetime(created_at)
+                except:
+                    created_at = fecha_inicio
+
+            updated_at = row.get('updated_at', datetime.utcnow())
+            if isinstance(updated_at, str):
+                try:
+                    updated_at = pd.to_datetime(updated_at)
+                except:
+                    updated_at = datetime.utcnow()
+
+            codigo = str(row['codigo']).strip()
+
+            # Verificar si el caso ya existe
+            result = await session.exec(select(Case).where(Case.codigo == codigo))
+            existing_case = result.first()
+
+            if existing_case:
+                # Actualizar caso existente
+                existing_case.servicio_o_plataforma = str(row['servicio_o_plataforma'])
+                existing_case.prioridad = prioridad
+                existing_case.estado = estado
+                existing_case.sby_responsable = str(row.get('sby_responsable', ''))
+                existing_case.motivo = str(row.get('motivo', ''))
+                existing_case.observaciones = str(row.get('observaciones', ''))
+                existing_case.fecha_inicio = fecha_inicio
+                existing_case.fecha_fin = fecha_fin
+                existing_case.updated_at = updated_at
+                
+                session.add(existing_case)
+                casos_map[codigo] = existing_case.id
+                casos_actualizados += 1
+            else:
+                # Crear nuevo caso
+                new_case = Case(
+                    codigo=codigo,
+                    servicio_o_plataforma=str(row['servicio_o_plataforma']),
+                    prioridad=prioridad,
+                    estado=estado,
+                    motivo=str(row.get('motivo', '')),
+                    sby_responsable=str(row.get('sby_responsable', '')),
+                    observaciones=str(row.get('observaciones', '')),
+                    creado_por_id=current_user.id,
+                    fecha_inicio=fecha_inicio,
+                    fecha_fin=fecha_fin,
+                    created_at=created_at,
+                    updated_at=updated_at
+                )
+                
+                session.add(new_case)
+                await session.flush()
+                casos_map[codigo] = new_case.id
+                casos_importados += 1
+
+        except Exception as e:
+            errores_casos.append(f"Fila {index+2}: {str(e)}")
+
+    await session.commit()
+    print(f"✅ Casos importados: {casos_importados}, actualizados: {casos_actualizados}")
+
+    # Importar observaciones si existen
+    observaciones_importadas = 0
+    errores_observaciones = []
+
+    if has_observations and df_observaciones is not None and len(df_observaciones) > 0:
+        print(f"\n📝 Importando {len(df_observaciones)} observaciones...")
+        
+        required_cols_obs = ['case_codigo', 'content', 'created_at']
+        missing_cols_obs = [col for col in required_cols_obs if col not in df_observaciones.columns]
+        
+        if missing_cols_obs:
+            raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en la hoja 'Observaciones': {', '.join(missing_cols_obs)}")
+
+        df_observaciones.fillna('', inplace=True)
+
+        for index, row in df_observaciones.iterrows():
+            try:
+                case_codigo = str(row['case_codigo']).strip()
+                
+                # Buscar el case_id
+                if case_codigo not in casos_map:
+                    result = await session.exec(select(Case).where(Case.codigo == case_codigo))
+                    case = result.first()
+                    if not case:
+                        errores_observaciones.append(f"Fila {index+2}: Caso '{case_codigo}' no encontrado")
+                        continue
+                    case_id = case.id
+                else:
+                    case_id = casos_map[case_codigo]
+
+                created_at_obs = row.get('created_at')
+                if isinstance(created_at_obs, str):
+                    try:
+                        created_at_obs = pd.to_datetime(created_at_obs)
+                    except:
+                        created_at_obs = datetime.utcnow()
+
+                created_by_id = row.get('created_by_id')
+                if pd.isna(created_by_id) or created_by_id == '':
+                    created_by_id = current_user.id
+                else:
+                    created_by_id = int(created_by_id)
+
+                new_observation = Observation(
+                    case_id=case_id,
+                    content=str(row['content']),
+                    created_by_id=created_by_id,
+                    created_at=created_at_obs
+                )
+                
+                session.add(new_observation)
+                observaciones_importadas += 1
+
+            except Exception as e:
+                errores_observaciones.append(f"Fila {index+2}: {str(e)}")
+
+        await session.commit()
+        print(f"✅ Observaciones importadas: {observaciones_importadas}")
+
+    # Preparar respuesta
+    response_msg = f"Importación completada: {casos_importados} casos creados, {casos_actualizados} casos actualizados"
+    if observaciones_importadas > 0:
+        response_msg += f", {observaciones_importadas} observaciones importadas"
+    
+    if errores_casos or errores_observaciones:
+        response_msg += f". Errores: {len(errores_casos)} en casos, {len(errores_observaciones)} en observaciones"
+    
+    return {
+        "message": response_msg,
+        "casos_importados": casos_importados,
+        "casos_actualizados": casos_actualizados,
+        "observaciones_importadas": observaciones_importadas,
+        "errores": errores_casos + errores_observaciones
+    }
+
+
+# ==========================================
+# EXPORTAR USUARIOS
+# ==========================================
+@router.get("/export-users")
+async def export_users(
+    format: str = Query("xlsx", pattern="^(xlsx|csv)$"),
+    session: AsyncSession = Depends(get_session),
+    current_user = Depends(get_current_user)
+):
+    """
+    Exporta todos los usuarios del sistema.
+    Solo disponible para administradores.
+    """
+    from app.models import UserRole
+    
+    if current_user.rol != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden exportar usuarios")
+    
+    # Obtener todos los usuarios
+    users_result = await session.exec(select(User))
+    users = users_result.all()
+
+    if not users:
+        raise HTTPException(status_code=404, detail="No se encontraron usuarios para exportar")
+
+    # Crear DataFrame de usuarios (sin incluir la contraseña hasheada por seguridad)
+    users_data = []
+    for user in users:
+        users_data.append({
+            'id': user.id,
+            'nombre': user.nombre,
+            'email': user.email,
+            'rol': user.rol.value,
+            'is_active': user.is_active
+        })
+    
+    df_users = pd.DataFrame(users_data)
+
+    stream = io.BytesIO()
+
+    if format == 'xlsx':
+        df_users.to_excel(stream, index=False, sheet_name='Usuarios')
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = "usuarios_export.xlsx"
+    else:
+        df_users.to_csv(stream, index=False, encoding='utf-8')
+        media_type = "text/csv"
+        filename = "usuarios_export.csv"
+
+    stream.seek(0)
+    
+    return StreamingResponse(
+        stream,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# ==========================================
+# IMPORTAR USUARIOS
+# ==========================================
+@router.post("/import-users", status_code=201)
+async def import_users(
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+    current_user = Depends(get_current_user)
+):
+    """
+    Importa usuarios desde un archivo Excel o CSV.
+    Solo disponible para administradores.
+    
+    Columnas requeridas: nombre, email, rol
+    Columnas opcionales: password, is_active
+    
+    Si no se proporciona password, se genera uno aleatorio que se incluye en la respuesta.
+    """
+    from app.models import UserRole, UserCreate
+    from app.auth import get_password_hash
+    import secrets
+    import string
+    
+    if current_user.rol != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden importar usuarios")
+    
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Formato de archivo inválido. Use Excel (.xlsx, .xls) o CSV (.csv)")
+
+    contents = await file.read()
+    
+    try:
+        if file.filename.endswith('.csv'):
+            df_users = pd.read_csv(io.BytesIO(contents))
+        else:
+            df_users = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al parsear el archivo: {str(e)}")
+
+    # Validar columnas requeridas
+    required_cols = ['nombre', 'email', 'rol']
+    missing_cols = [col for col in required_cols if col not in df_users.columns]
+    
+    if missing_cols:
+        raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas: {', '.join(missing_cols)}")
+
+    df_users.fillna('', inplace=True)
+
+    usuarios_importados = 0
+    usuarios_actualizados = 0
+    errores = []
+    passwords_generados = []
+
+    print(f"\n👥 Importando {len(df_users)} usuarios...")
+
+    for index, row in df_users.iterrows():
+        try:
+            email = str(row['email']).strip().lower()
+            nombre = str(row['nombre']).strip()
+            
+            # Validar email
+            if not email or '@' not in email:
+                errores.append(f"Fila {index+2}: Email inválido '{email}'")
+                continue
+            
+            # Validar rol
+            try:
+                rol_str = str(row['rol']).upper()
+                rol = UserRole[rol_str]
+            except:
+                errores.append(f"Fila {index+2}: Rol inválido '{row['rol']}'. Use: CONSULTA, INGRESO o ADMIN")
+                continue
+            
+            # Verificar si el usuario ya existe
+            result = await session.exec(select(User).where(User.email == email))
+            existing_user = result.first()
+
+            if existing_user:
+                # Actualizar usuario existente
+                existing_user.nombre = nombre
+                existing_user.rol = rol
+                
+                if 'is_active' in row and str(row['is_active']).lower() in ['false', '0', 'no']:
+                    existing_user.is_active = False
+                else:
+                    existing_user.is_active = True
+                
+                # Si se proporciona nueva contraseña, actualizarla
+                if 'password' in row and str(row['password']).strip():
+                    existing_user.hashed_password = get_password_hash(str(row['password']))
+                
+                session.add(existing_user)
+                usuarios_actualizados += 1
+            else:
+                # Generar o usar contraseña proporcionada
+                if 'password' in row and str(row['password']).strip():
+                    password = str(row['password']).strip()
+                else:
+                    # Generar contraseña aleatoria
+                    alphabet = string.ascii_letters + string.digits
+                    password = ''.join(secrets.choice(alphabet) for _ in range(12))
+                    passwords_generados.append({
+                        'email': email,
+                        'nombre': nombre,
+                        'password': password
+                    })
+                
+                is_active = True
+                if 'is_active' in row and str(row['is_active']).lower() in ['false', '0', 'no']:
+                    is_active = False
+                
+                # Crear nuevo usuario
+                new_user = User(
+                    nombre=nombre,
+                    email=email,
+                    hashed_password=get_password_hash(password),
+                    rol=rol,
+                    is_active=is_active
+                )
+                
+                session.add(new_user)
+                usuarios_importados += 1
+
+        except Exception as e:
+            errores.append(f"Fila {index+2}: {str(e)}")
+
+    await session.commit()
+    print(f"✅ Usuarios importados: {usuarios_importados}, actualizados: {usuarios_actualizados}")
+
+    # Preparar respuesta
+    response_msg = f"Importación completada: {usuarios_importados} usuarios creados, {usuarios_actualizados} usuarios actualizados"
+    
+    if errores:
+        response_msg += f". {len(errores)} errores encontrados"
+    
+    response_data = {
+        "message": response_msg,
+        "usuarios_importados": usuarios_importados,
+        "usuarios_actualizados": usuarios_actualizados,
+        "errores": errores
+    }
+    
+    # Incluir contraseñas generadas si hay alguna
+    if passwords_generados:
+        response_data["contraseñas_generadas"] = passwords_generados
+        response_data["advertencia"] = "IMPORTANTE: Guarde las contraseñas generadas. No se podrán recuperar después."
+    
+    return response_data

@@ -5,11 +5,11 @@ import { clsx } from 'clsx';
 import { Avatar } from './ui/Avatar';
 
 interface TimelineItem {
-    type: 'OBSERVATION' | 'AUDIT';
+    type: 'OBSERVATION' | 'AUDIT' | 'CREATE';
     id: number;
-    content?: string; // For observation
-    action?: string; // For audit
-    details?: Record<string, any>; // For audit
+    content?: string; // For observation and CREATE
+    action?: string; // For audit and CREATE
+    details?: Record<string, any>; // For audit and CREATE
     created_at: string;
     user_name?: string;
     user_id?: number;
@@ -29,6 +29,7 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
         <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent dark:before:via-slate-700">
             {items.map((item, index) => {
                 const isMe = item.type === 'OBSERVATION' && item.user_id === currentUserId;
+                const isCreate = item.type === 'CREATE';
 
                 return (
                     <motion.div
@@ -49,6 +50,8 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
                         )}>
                             {item.type === 'OBSERVATION' ? (
                                 <Avatar name={item.user_name || 'Desconocido'} size="md" />
+                            ) : isCreate ? (
+                                <User size={16} className="text-emerald-500" />
                             ) : item.action === 'UPDATE' ? (
                                 <ArrowRight size={16} className="text-blue-500" />
                             ) : item.action === 'BULK_UPDATE' ? (
@@ -70,7 +73,9 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
                                 ? (isMe
                                     ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-900/30 rounded-tr-none"
                                     : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-tl-none")
-                                : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 border-dashed"
+                                : isCreate
+                                    ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-900/30"
+                                    : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 border-dashed"
                         )}>
                             {/* Header */}
                             <div className={clsx(
@@ -79,7 +84,9 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
                             )}>
                                 <span className={clsx(
                                     "text-xs font-bold",
-                                    item.type === 'OBSERVATION' ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400"
+                                    item.type === 'OBSERVATION' ? "text-slate-700 dark:text-slate-200" :
+                                    isCreate ? "text-emerald-700 dark:text-emerald-300" :
+                                    "text-slate-500 dark:text-slate-400"
                                 )}>
                                     {item.user_name || (isMe ? 'Yo' : 'Usuario')}
                                 </span>
@@ -101,6 +108,38 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
                                         {item.content || ''}
                                     </ReactMarkdown>
                                 </div>
+                            ) : isCreate ? (
+                                <div className="text-xs space-y-2">
+                                    <strong className="block text-emerald-700 dark:text-emerald-300 uppercase tracking-wider text-[10px] mb-2">CASO CREADO</strong>
+                                    {item.content && (
+                                        <div className="bg-white/50 dark:bg-black/20 rounded border border-emerald-200 dark:border-emerald-700/50 p-2">
+                                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Motivo:</p>
+                                            <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{item.content}</p>
+                                        </div>
+                                    )}
+                                    {item.details && (
+                                        <div className="bg-white/50 dark:bg-black/20 rounded border border-emerald-200 dark:border-emerald-700/50 p-2 space-y-1.5 text-[11px]">
+                                            {item.details.servicio && (
+                                                <div className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline">
+                                                    <span className="font-semibold text-slate-500 dark:text-slate-400">Servicio:</span>
+                                                    <span className="text-slate-600 dark:text-slate-300">{item.details.servicio}</span>
+                                                </div>
+                                            )}
+                                            {item.details.prioridad && (
+                                                <div className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline">
+                                                    <span className="font-semibold text-slate-500 dark:text-slate-400">Prioridad:</span>
+                                                    <span className="text-slate-600 dark:text-slate-300">{item.details.prioridad}</span>
+                                                </div>
+                                            )}
+                                            {item.details.sby_responsable && (
+                                                <div className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline">
+                                                    <span className="font-semibold text-slate-500 dark:text-slate-400">Responsable:</span>
+                                                    <span className="text-slate-600 dark:text-slate-300">{item.details.sby_responsable}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
                                 <div className="text-xs space-y-2">
                                     <strong className="block text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">{item.action}</strong>
@@ -116,18 +155,28 @@ export function Timeline({ items, currentUserId }: TimelineProps) {
                                                 </span>
                                             </div>
                                         </div>
-                                    ) : item.details && (
+                                    ) : item.details && Object.keys(item.details).length > 0 && (
                                         <div className="bg-white/50 dark:bg-black/20 rounded border border-slate-200 dark:border-slate-700/50 p-2 space-y-1.5">
-                                            {Object.entries(item.details).map(([key, diff]: [string, any]) => (
-                                                <div key={key} className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 items-baseline font-mono text-[11px]">
-                                                    <span className="font-semibold text-slate-500 dark:text-slate-400">{key}:</span>
-                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                        <span className="text-red-500 line-through bg-red-50 dark:bg-red-900/20 px-1 rounded decoration-2">{diff?.old ?? '?'}</span>
-                                                        <ArrowRight size={10} className="text-slate-300" />
-                                                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1 rounded font-medium">{diff?.new ?? '?'}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                            {Object.entries(item.details).map(([key, diff]: [string, any]) => {
+                                                // Si diff es un objeto con old y new, es un cambio
+                                                if (diff && typeof diff === 'object' && ('old' in diff || 'new' in diff)) {
+                                                    return (
+                                                        <div key={key} className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 items-baseline font-mono text-[11px]">
+                                                            <span className="font-semibold text-slate-500 dark:text-slate-400 capitalize">{key.replace(/_/g, ' ')}:</span>
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                {diff.old && (
+                                                                    <>
+                                                                        <span className="text-red-500 line-through bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded decoration-2 break-all">{diff.old}</span>
+                                                                        <ArrowRight size={10} className="text-slate-300 shrink-0" />
+                                                                    </>
+                                                                )}
+                                                                <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded font-medium break-all">{diff.new ?? '?'}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
                                         </div>
                                     )}
                                 </div>

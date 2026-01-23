@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, Loader2, Users } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useToast } from '../context/ToastContext';
@@ -7,37 +7,46 @@ import api from '../api/axios';
 
 interface ImportResult {
     message: string;
-    casos_importados: number;
-    casos_actualizados: number;
-    observaciones_importadas: number;
-    errores_casos: string[];
-    errores_observaciones: string[];
+    casos_importados?: number;
+    casos_actualizados?: number;
+    observaciones_importadas?: number;
+    usuarios_importados?: number;
+    usuarios_actualizados?: number;
+    errores?: string[];
+    errores_casos?: string[];
+    errores_observaciones?: string[];
+    contraseñas_generadas?: Array<{email: string; nombre: string; password: string}>;
+    advertencia?: string;
 }
 
 export default function ImportExportCases() {
-    const [casosFile, setCasosFile] = useState<File | null>(null);
-    const [observacionesFile, setObservacionesFile] = useState<File | null>(null);
+    const [completeFile, setCompleteFile] = useState<File | null>(null);
+    const [usersFile, setUsersFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
+    const [isImportingUsers, setIsImportingUsers] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [isExportingUsers, setIsExportingUsers] = useState(false);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
+    const [userImportResult, setUserImportResult] = useState<ImportResult | null>(null);
     const { showToast } = useToast();
 
-    const handleCasosFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleCompleteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setCasosFile(e.target.files[0]);
+            setCompleteFile(e.target.files[0]);
             setImportResult(null);
         }
     };
 
-    const handleObservacionesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleUsersFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setObservacionesFile(e.target.files[0]);
+            setUsersFile(e.target.files[0]);
+            setUserImportResult(null);
         }
     };
 
-    const handleImport = async () => {
-        if (!casosFile) {
-            showToast('Por favor selecciona el archivo de casos', 'error');
+    const handleImportComplete = async () => {
+        if (!completeFile) {
+            showToast('error', 'Error', 'Por favor selecciona un archivo Excel');
             return;
         }
 
@@ -46,13 +55,9 @@ export default function ImportExportCases() {
 
         try {
             const formData = new FormData();
-            formData.append('casos_file', casosFile);
-            
-            if (observacionesFile) {
-                formData.append('observaciones_file', observacionesFile);
-            }
+            formData.append('file', completeFile);
 
-            const response = await api.post('/cases-io/import-with-observations', formData, {
+            const response = await api.post('/cases-io/import-complete-excel', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -60,33 +65,72 @@ export default function ImportExportCases() {
 
             setImportResult(response.data);
             
-            const hasErrors = response.data.errores_casos.length > 0 || 
-                             response.data.errores_observaciones.length > 0;
+            const hasErrors = (response.data.errores && response.data.errores.length > 0);
 
             if (hasErrors) {
-                showToast('Importación completada con algunos errores', 'warning');
+                showToast('warning', 'Importación completada', 'Se completó la importación pero con algunos errores');
             } else {
-                showToast('Importación completada exitosamente', 'success');
+                showToast('success', 'Éxito', 'Importación completada exitosamente');
             }
 
-            // Limpiar archivos después de importación exitosa
-            setCasosFile(null);
-            setObservacionesFile(null);
-            
-            // Limpiar inputs de archivos
-            const casosInput = document.getElementById('casos-file') as HTMLInputElement;
-            const obsInput = document.getElementById('observaciones-file') as HTMLInputElement;
-            if (casosInput) casosInput.value = '';
-            if (obsInput) obsInput.value = '';
+            setCompleteFile(null);
+            const fileInput = document.getElementById('complete-file') as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
 
         } catch (error: any) {
-            console.error('Error importing cases:', error);
+            console.error('Error importing:', error);
             showToast(
-                error.response?.data?.detail || 'Error al importar casos',
-                'error'
+                'error',
+                'Error al importar',
+                error.response?.data?.detail || 'Error al importar el archivo'
             );
         } finally {
             setIsImporting(false);
+        }
+    };
+
+    const handleImportUsers = async () => {
+        if (!usersFile) {
+            showToast('error', 'Error', 'Por favor selecciona un archivo de usuarios');
+            return;
+        }
+
+        setIsImportingUsers(true);
+        setUserImportResult(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', usersFile);
+
+            const response = await api.post('/cases-io/import-users', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            setUserImportResult(response.data);
+            
+            const hasErrors = (response.data.errores && response.data.errores.length > 0);
+
+            if (hasErrors) {
+                showToast('warning', 'Importación completada', 'Se completó la importación de usuarios pero con algunos errores');
+            } else {
+                showToast('success', 'Éxito', 'Usuarios importados exitosamente');
+            }
+
+            setUsersFile(null);
+            const fileInput = document.getElementById('users-file') as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
+
+        } catch (error: any) {
+            console.error('Error importing users:', error);
+            showToast(
+                'error',
+                'Error al importar usuarios',
+                error.response?.data?.detail || 'Error al importar usuarios'
+            );
+        } finally {
+            setIsImportingUsers(false);
         }
     };
 
@@ -101,361 +145,416 @@ export default function ImportExportCases() {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `casos_y_observaciones_export.${format}`);
+            link.setAttribute('download', `casos_completos.${format}`);
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            window.URL.revokeObjectURL(url);
 
-            showToast('Exportación completada exitosamente', 'success');
-        } catch (error) {
+            showToast('success', 'Éxito', `Casos exportados en formato ${format.toUpperCase()}`);
+        } catch (error: any) {
             console.error('Error exporting cases:', error);
-            showToast('Error al exportar casos', 'error');
+            showToast('error', 'Error al exportar', error.response?.data?.detail || 'Error al exportar casos');
         } finally {
             setIsExporting(false);
         }
     };
 
-    const handleExportSimple = async (format: 'tsv' | 'csv' | 'xlsx' = 'xlsx') => {
-        setIsExporting(true);
+    const handleExportUsers = async (format: 'xlsx' | 'csv' = 'xlsx') => {
+        setIsExportingUsers(true);
         
         try {
-            const response = await api.get(`/cases-io/export?format=${format}`, {
+            const response = await api.get(`/cases-io/export-users?format=${format}`, {
                 responseType: 'blob'
             });
 
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `casos_export.${format}`);
+            link.setAttribute('download', `usuarios_export.${format}`);
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            window.URL.revokeObjectURL(url);
 
-            showToast('Exportación simple completada', 'success');
-        } catch (error) {
-            console.error('Error exporting cases:', error);
-            showToast('Error al exportar casos', 'error');
+            showToast('success', 'Éxito', `Usuarios exportados en formato ${format.toUpperCase()}`);
+        } catch (error: any) {
+            console.error('Error exporting users:', error);
+            showToast('error', 'Error al exportar usuarios', error.response?.data?.detail || 'Error al exportar usuarios');
         } finally {
-            setIsExporting(false);
+            setIsExportingUsers(false);
         }
     };
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="border-b border-slate-200 dark:border-slate-700 pb-4">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                    Importar / Exportar Casos
+        <div className="max-w-6xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                    Importar / Exportar Datos
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-1">
-                    Gestiona la importación y exportación masiva de casos y observaciones
+                <p className="text-slate-500 dark:text-slate-400 mt-1">
+                    Gestiona la importación y exportación de casos, observaciones y usuarios
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* SECCIÓN DE IMPORTACIÓN */}
-                <Card>
-                    <div className="p-6">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                                <Upload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                Importar Casos
-                            </h2>
-                        </div>
+            {/* SECCIÓN: CASOS Y OBSERVACIONES */}
+            <Card className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <FileSpreadsheet className="text-indigo-500" size={24} />
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                        Casos y Observaciones
+                    </h2>
+                </div>
 
-                        <div className="space-y-4">
-                            {/* Archivo de Casos */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                    Archivo de Casos (Requerido) *
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        id="casos-file"
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        onChange={handleCasosFileChange}
-                                        className="block w-full text-sm text-slate-500 dark:text-slate-400
-                                            file:mr-4 file:py-2 file:px-4
-                                            file:rounded-lg file:border-0
-                                            file:text-sm file:font-semibold
-                                            file:bg-blue-50 file:text-blue-700
-                                            hover:file:bg-blue-100
-                                            dark:file:bg-blue-900 dark:file:text-blue-300
-                                            dark:hover:file:bg-blue-800
-                                            cursor-pointer"
-                                    />
-                                </div>
-                                {casosFile && (
-                                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                        <FileSpreadsheet className="h-4 w-4" />
-                                        {casosFile.name}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Archivo de Observaciones */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                    Archivo de Observaciones (Opcional)
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        id="observaciones-file"
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        onChange={handleObservacionesFileChange}
-                                        className="block w-full text-sm text-slate-500 dark:text-slate-400
-                                            file:mr-4 file:py-2 file:px-4
-                                            file:rounded-lg file:border-0
-                                            file:text-sm file:font-semibold
-                                            file:bg-slate-50 file:text-slate-700
-                                            hover:file:bg-slate-100
-                                            dark:file:bg-slate-800 dark:file:text-slate-300
-                                            dark:hover:file:bg-slate-700
-                                            cursor-pointer"
-                                    />
-                                </div>
-                                {observacionesFile && (
-                                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                        <FileSpreadsheet className="h-4 w-4" />
-                                        {observacionesFile.name}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Botón de Importar */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* EXPORTAR */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <Download size={20} />
+                            Exportar Casos
+                        </h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Exporta todos los casos con sus observaciones en un único archivo Excel con dos hojas.
+                        </p>
+                        <div className="flex gap-2">
                             <Button
-                                onClick={handleImport}
-                                disabled={!casosFile || isImporting}
+                                variant="outline"
+                                onClick={() => handleExport('xlsx')}
+                                disabled={isExporting}
+                                className="flex-1"
+                            >
+                                {isExporting ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Exportando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        Exportar Excel
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => handleExport('csv')}
+                                disabled={isExporting}
+                                className="flex-1"
+                            >
+                                {isExporting ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Exportando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        Exportar CSV
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* IMPORTAR */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <Upload size={20} />
+                            Importar Casos
+                        </h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Importa casos y observaciones desde un archivo Excel con hojas "Casos" y "Observaciones".
+                        </p>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Archivo Excel Completo
+                                </label>
+                                <input
+                                    id="complete-file"
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleCompleteFileChange}
+                                    className="block w-full text-sm text-slate-500 dark:text-slate-400
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-lg file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-indigo-50 file:text-indigo-700
+                                        hover:file:bg-indigo-100
+                                        dark:file:bg-indigo-900/30 dark:file:text-indigo-400
+                                        cursor-pointer"
+                                />
+                                {completeFile && (
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                        Archivo seleccionado: {completeFile.name}
+                                    </p>
+                                )}
+                            </div>
+
+                            <Button
+                                onClick={handleImportComplete}
+                                disabled={!completeFile || isImporting}
                                 className="w-full"
                             >
                                 {isImporting ? (
                                     <>
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        <Loader2 className="animate-spin" size={16} />
                                         Importando...
                                     </>
                                 ) : (
                                     <>
-                                        <Upload className="h-4 w-4 mr-2" />
+                                        <Upload size={16} />
                                         Importar Casos
                                     </>
                                 )}
                             </Button>
-
-                            {/* Información de ayuda */}
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                                <div className="flex gap-2">
-                                    <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                                    <div className="text-sm text-blue-800 dark:text-blue-300">
-                                        <p className="font-medium mb-1">Formato de archivos:</p>
-                                        <ul className="list-disc list-inside space-y-1 text-xs">
-                                            <li>Casos: codigo, servicio_o_plataforma, estado, prioridad</li>
-                                            <li>Observaciones: case_codigo, content, created_at</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
-                </Card>
+                </div>
 
-                {/* SECCIÓN DE EXPORTACIÓN */}
-                <Card>
-                    <div className="p-6">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
-                                <Download className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                Exportar Casos
-                            </h2>
-                        </div>
-
-                        <div className="space-y-4">
-                            {/* Exportar con Observaciones */}
-                            <div>
-                                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                                    Exportación Completa (Casos + Observaciones)
-                                </h3>
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={() => handleExport('xlsx')}
-                                        disabled={isExporting}
-                                        variant="outline"
-                                        className="flex-1"
-                                    >
-                                        {isExporting ? (
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        ) : (
-                                            <Download className="h-4 w-4 mr-2" />
-                                        )}
-                                        Excel
-                                    </Button>
-                                    <Button
-                                        onClick={() => handleExport('csv')}
-                                        disabled={isExporting}
-                                        variant="outline"
-                                        className="flex-1"
-                                    >
-                                        {isExporting ? (
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        ) : (
-                                            <Download className="h-4 w-4 mr-2" />
-                                        )}
-                                        CSV
-                                    </Button>
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                                    Exporta casos y observaciones en hojas separadas
+                {/* RESULTADO DE IMPORTACIÓN DE CASOS */}
+                {importResult && (
+                    <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <h4 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <CheckCircle className="text-green-500" size={20} />
+                            Resultado de Importación
+                        </h4>
+                        
+                        <div className="space-y-2 text-sm">
+                            {importResult.casos_importados !== undefined && (
+                                <p className="text-slate-700 dark:text-slate-300">
+                                    ✅ Casos creados: <strong>{importResult.casos_importados}</strong>
                                 </p>
-                            </div>
-
-                            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                                    Exportación Simple (Solo Casos)
-                                </h3>
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={() => handleExportSimple('xlsx')}
-                                        disabled={isExporting}
-                                        variant="secondary"
-                                        className="flex-1"
-                                    >
-                                        Excel
-                                    </Button>
-                                    <Button
-                                        onClick={() => handleExportSimple('csv')}
-                                        disabled={isExporting}
-                                        variant="secondary"
-                                        className="flex-1"
-                                    >
-                                        CSV
-                                    </Button>
-                                    <Button
-                                        onClick={() => handleExportSimple('tsv')}
-                                        disabled={isExporting}
-                                        variant="secondary"
-                                        className="flex-1"
-                                    >
-                                        TSV
-                                    </Button>
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                                    Exporta solo la información de casos
-                                </p>
-                            </div>
-
-                            {/* Información de exportación */}
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
-                                <div className="flex gap-2">
-                                    <AlertCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                                    <div className="text-sm text-emerald-800 dark:text-emerald-300">
-                                        <p className="font-medium mb-1">Contenido exportado:</p>
-                                        <ul className="list-disc list-inside space-y-1 text-xs">
-                                            <li>Excel: 2 hojas (Casos + Observaciones)</li>
-                                            <li>CSV: Solo tabla de casos</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-
-            {/* RESULTADO DE IMPORTACIÓN */}
-            {importResult && (
-                <Card>
-                    <div className="p-6">
-                        <div className="flex items-center gap-3 mb-4">
-                            {importResult.errores_casos.length === 0 && 
-                             importResult.errores_observaciones.length === 0 ? (
-                                <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                            ) : (
-                                <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                             )}
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                Resultado de Importación
-                            </h3>
+                            {importResult.casos_actualizados !== undefined && (
+                                <p className="text-slate-700 dark:text-slate-300">
+                                    🔄 Casos actualizados: <strong>{importResult.casos_actualizados}</strong>
+                                </p>
+                            )}
+                            {importResult.observaciones_importadas !== undefined && importResult.observaciones_importadas > 0 && (
+                                <p className="text-slate-700 dark:text-slate-300">
+                                    📝 Observaciones importadas: <strong>{importResult.observaciones_importadas}</strong>
+                                </p>
+                            )}
                         </div>
 
-                        {/* Estadísticas */}
-                        <div className="grid grid-cols-3 gap-4 mb-4">
-                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
-                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                    {importResult.casos_importados}
-                                </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Casos Importados
-                                </p>
-                            </div>
-                            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
-                                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                                    {importResult.casos_actualizados}
-                                </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Casos Actualizados
-                                </p>
-                            </div>
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 text-center">
-                                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                    {importResult.observaciones_importadas}
-                                </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Observaciones Importadas
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Errores */}
-                        {(importResult.errores_casos.length > 0 || 
-                          importResult.errores_observaciones.length > 0) && (
-                            <div className="space-y-3">
-                                {importResult.errores_casos.length > 0 && (
-                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                                        <div className="flex items-start gap-2">
-                                            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">
-                                                    Errores en Casos ({importResult.errores_casos.length}):
-                                                </p>
-                                                <ul className="text-xs text-red-700 dark:text-red-400 space-y-1 max-h-32 overflow-y-auto">
-                                                    {importResult.errores_casos.map((error, idx) => (
-                                                        <li key={idx}>• {error}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {importResult.errores_observaciones.length > 0 && (
-                                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                                        <div className="flex items-start gap-2">
-                                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
-                                                    Errores en Observaciones ({importResult.errores_observaciones.length}):
-                                                </p>
-                                                <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-1 max-h-32 overflow-y-auto">
-                                                    {importResult.errores_observaciones.map((error, idx) => (
-                                                        <li key={idx}>• {error}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                        {importResult.errores && importResult.errores.length > 0 && (
+                            <div className="mt-4">
+                                <h5 className="font-semibold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                                    <XCircle size={16} />
+                                    Errores encontrados ({importResult.errores.length})
+                                </h5>
+                                <div className="max-h-40 overflow-y-auto space-y-1">
+                                    {importResult.errores.slice(0, 10).map((error, idx) => (
+                                        <p key={idx} className="text-xs text-red-600 dark:text-red-400">
+                                            • {error}
+                                        </p>
+                                    ))}
+                                    {importResult.errores.length > 10 && (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                                            ... y {importResult.errores.length - 10} errores más
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
-                </Card>
-            )}
+                )}
+            </Card>
+
+            {/* SECCIÓN: USUARIOS */}
+            <Card className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <Users className="text-emerald-500" size={24} />
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                        Usuarios
+                    </h2>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* EXPORTAR USUARIOS */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <Download size={20} />
+                            Exportar Usuarios
+                        </h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Exporta todos los usuarios del sistema (solo administradores).
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => handleExportUsers('xlsx')}
+                                disabled={isExportingUsers}
+                                className="flex-1"
+                            >
+                                {isExportingUsers ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Exportando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        Exportar Excel
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => handleExportUsers('csv')}
+                                disabled={isExportingUsers}
+                                className="flex-1"
+                            >
+                                {isExportingUsers ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Exportando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        Exportar CSV
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* IMPORTAR USUARIOS */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <Upload size={20} />
+                            Importar Usuarios
+                        </h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Importa usuarios desde Excel o CSV. Columnas: nombre, email, rol (opcional: password, is_active).
+                        </p>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Archivo de Usuarios
+                                </label>
+                                <input
+                                    id="users-file"
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    onChange={handleUsersFileChange}
+                                    className="block w-full text-sm text-slate-500 dark:text-slate-400
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-lg file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-emerald-50 file:text-emerald-700
+                                        hover:file:bg-emerald-100
+                                        dark:file:bg-emerald-900/30 dark:file:text-emerald-400
+                                        cursor-pointer"
+                                />
+                                {usersFile && (
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                        Archivo seleccionado: {usersFile.name}
+                                    </p>
+                                )}
+                            </div>
+
+                            <Button
+                                onClick={handleImportUsers}
+                                disabled={!usersFile || isImportingUsers}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                            >
+                                {isImportingUsers ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Importando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Importar Usuarios
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* RESULTADO DE IMPORTACIÓN DE USUARIOS */}
+                {userImportResult && (
+                    <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <h4 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <CheckCircle className="text-green-500" size={20} />
+                            Resultado de Importación de Usuarios
+                        </h4>
+                        
+                        <div className="space-y-2 text-sm">
+                            {userImportResult.usuarios_importados !== undefined && (
+                                <p className="text-slate-700 dark:text-slate-300">
+                                    ✅ Usuarios creados: <strong>{userImportResult.usuarios_importados}</strong>
+                                </p>
+                            )}
+                            {userImportResult.usuarios_actualizados !== undefined && (
+                                <p className="text-slate-700 dark:text-slate-300">
+                                    🔄 Usuarios actualizados: <strong>{userImportResult.usuarios_actualizados}</strong>
+                                </p>
+                            )}
+                        </div>
+
+                        {userImportResult.contraseñas_generadas && userImportResult.contraseñas_generadas.length > 0 && (
+                            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
+                                <h5 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-2 flex items-center gap-2">
+                                    <AlertCircle size={16} />
+                                    {userImportResult.advertencia}
+                                </h5>
+                                <div className="max-h-60 overflow-y-auto space-y-2">
+                                    {userImportResult.contraseñas_generadas.map((user, idx) => (
+                                        <div key={idx} className="text-xs bg-white dark:bg-slate-800 p-2 rounded border border-yellow-200 dark:border-yellow-800">
+                                            <p className="font-semibold text-slate-900 dark:text-white">{user.nombre} ({user.email})</p>
+                                            <p className="font-mono text-slate-700 dark:text-slate-300">Contraseña: <strong>{user.password}</strong></p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {userImportResult.errores && userImportResult.errores.length > 0 && (
+                            <div className="mt-4">
+                                <h5 className="font-semibold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                                    <XCircle size={16} />
+                                    Errores encontrados ({userImportResult.errores.length})
+                                </h5>
+                                <div className="max-h-40 overflow-y-auto space-y-1">
+                                    {userImportResult.errores.slice(0, 10).map((error, idx) => (
+                                        <p key={idx} className="text-xs text-red-600 dark:text-red-400">
+                                            • {error}
+                                        </p>
+                                    ))}
+                                    {userImportResult.errores.length > 10 && (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                                            ... y {userImportResult.errores.length - 10} errores más
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Card>
+
+            {/* INFORMACIÓN Y AYUDA */}
+            <Card className="p-6 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+                <div className="flex items-start gap-3">
+                    <AlertCircle className="text-blue-500 mt-1" size={20} />
+                    <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <h3 className="font-semibold text-slate-900 dark:text-white">Información Importante</h3>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li>El archivo Excel de casos debe contener hojas llamadas "Casos" y opcionalmente "Observaciones"</li>
+                            <li>Las columnas requeridas para casos son: codigo, servicio_o_plataforma, estado, prioridad, motivo</li>
+                            <li>Las columnas requeridas para usuarios son: nombre, email, rol</li>
+                            <li>Si no se proporciona contraseña para usuarios nuevos, se generará una automáticamente</li>
+                            <li>Los casos y usuarios existentes se actualizarán si se encuentran duplicados</li>
+                        </ul>
+                    </div>
+                </div>
+            </Card>
         </div>
     );
 }

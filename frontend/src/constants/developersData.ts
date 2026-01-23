@@ -6,7 +6,7 @@ export const DEVELOPERS: DeveloperProfile[] = [
         name: 'Ronny Ortiz',
         role: 'Full Stack Developer',
         bio: 'Apasionado por crear experiencias web increíbles y escalables.',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Dev+One&background=random',
+        avatarUrl: '/images/team/ronny_ortiz.jpg',
         socialLinks: [
             { platform: 'github', url: 'https://github.com' },
             { platform: 'linkedin', url: 'https://linkedin.com' }
@@ -15,9 +15,9 @@ export const DEVELOPERS: DeveloperProfile[] = [
     {
         id: '2',
         name: 'Allan Cordova',
-        role: 'Frontend Specialist',
-        bio: 'Experto en React y diseño UI/UX. Amante del código limpio.',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Dev+Two&background=random',
+        role: 'DevOps Engineer',
+        bio: 'Especialista en Openshift automatización con Ansible y Sistemas Operativos.',
+        avatarUrl: '/images/team/allan_cordova.jpg',
         socialLinks: [
             { platform: 'github', url: 'https://github.com' },
             { platform: 'twitter', url: 'https://twitter.com' }
@@ -26,9 +26,9 @@ export const DEVELOPERS: DeveloperProfile[] = [
     {
         id: '3',
         name: 'Jose Briones',
-        role: 'Backend Developer',
+        role: 'DevOps Engineer',
         bio: 'Especialista en arquitecturas robustas y optimización de bases de datos.',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Dev+Three&background=random',
+        avatarUrl: '/images/team/jose_briones.jpg',
         socialLinks: [
             { platform: 'github', url: 'https://github.com' },
             { platform: 'linkedin', url: 'https://linkedin.com' }
@@ -39,7 +39,7 @@ export const DEVELOPERS: DeveloperProfile[] = [
         name: 'Larry Sanchez',
         role: 'DevOps Engineer',
         bio: 'Automatizando todo lo que se mueve. Fanático de Docker y CI/CD.',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Dev+Four&background=random',
+        avatarUrl: '/images/team/larry_sanchez.jpg',
         socialLinks: [
             { platform: 'github', url: 'https://github.com' },
             { platform: 'website', url: 'https://example.com' }

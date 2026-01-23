@@ -24,7 +24,7 @@ interface Case {
     prioridad: string;
     servicio_o_plataforma: string;
     sby_responsable: string;
-    novedades_y_comentarios: string;
+    motivo: string;
     ultima_actualizacion: string;
 }
 
@@ -496,8 +496,8 @@ export default function Dashboard() {
                                             {c.prioridad}
                                         </span>
                                     </td>
-                                    <td className="p-4 text-sm text-slate-500 dark:text-gray-400 max-w-xs truncate" title={c.novedades_y_comentarios}>
-                                        {c.novedades_y_comentarios || '-'}
+                                    <td className="p-4 text-sm text-slate-500 dark:text-gray-400 max-w-xs truncate" title={c.motivo}>
+                                        {c.motivo || '-'}
                                     </td>
                                     <td className="p-4 text-sm text-slate-500 dark:text-gray-400">{c.sby_responsable || '-'}</td>
                                     <td className="p-4">

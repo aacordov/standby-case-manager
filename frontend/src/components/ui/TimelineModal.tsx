@@ -44,7 +44,7 @@ export function TimelineModal({
                             leaveFrom="opacity-100 scale-100"
                             leaveTo="opacity-0 scale-95"
                         >
-                            <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white dark:bg-vscode-sidebar text-left align-middle shadow-xl transition-all border border-slate-200 dark:border-vscode-border flex flex-col max-h-[85vh]">
+                            <Dialog.Panel className="w-full max-w-7xl transform overflow-hidden rounded-2xl bg-white dark:bg-vscode-sidebar text-left align-middle shadow-xl transition-all border border-slate-200 dark:border-vscode-border flex flex-col max-h-[85vh]">
                                 {/* Header */}
                                 <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-vscode-border bg-slate-50 dark:bg-vscode-activity">
                                     <Dialog.Title
@@ -64,7 +64,7 @@ export function TimelineModal({
 
                                 {/* Content */}
                                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-white dark:bg-vscode-sidebar">
-                                    <div className="max-w-xl mx-auto">
+                                    <div className="max-w-6xl mx-auto">
                                         <Timeline items={items} currentUserId={currentUserId} />
                                     </div>
                                 </div>

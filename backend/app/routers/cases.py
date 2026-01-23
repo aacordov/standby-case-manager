@@ -89,7 +89,7 @@ async def read_cases(
     if sby_responsable:
         query = query.where(Case.sby_responsable.ilike(f"%{sby_responsable}%"))
     if search:
-        query = query.where(or_(Case.novedades_y_comentarios.ilike(f"%{search}%"), Case.codigo.ilike(f"%{search}%")))
+        query = query.where(or_(Case.motivo.ilike(f"%{search}%"), Case.codigo.ilike(f"%{search}%")))
     if start_date:
         if timezone_offset is not None:
              # Adjust for timezone: start_date is 00:00 local, so add offset to get UTC
@@ -114,7 +114,7 @@ async def read_cases(
     if sby_responsable:
         count_query = count_query.where(Case.sby_responsable.ilike(f"%{sby_responsable}%"))
     if search:
-        count_query = count_query.where(or_(Case.novedades_y_comentarios.ilike(f"%{search}%"), Case.codigo.ilike(f"%{search}%")))
+        count_query = count_query.where(or_(Case.motivo.ilike(f"%{search}%"), Case.codigo.ilike(f"%{search}%")))
     if start_date:
         if timezone_offset is not None:
             start_date_count = start_date
@@ -294,6 +294,19 @@ async def get_case_timeline(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    # Fetch the case to get creation data
+    case_query = select(Case).where(Case.id == case_id)
+    case_result = await session.execute(case_query)
+    case = case_result.scalars().first()
+    
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    # Fetch creator info
+    creator_query = select(User).where(User.id == case.creado_por_id)
+    creator_result = await session.execute(creator_query)
+    creator = creator_result.scalars().first()
+    
     # Fetch observations WITH user relationship loaded
     obs_query = select(Observation).where(Observation.case_id == case_id).options(selectinload(Observation.created_by))
     obs_result = await session.execute(obs_query)
@@ -305,6 +318,22 @@ async def get_case_timeline(
     audits = audit_result.scalars().all()
     
     timeline = []
+    
+    # Add case creation as the first item in timeline
+    timeline.append({
+        "type": "CREATE",
+        "id": 0,  # Special ID for creation event
+        "action": "CREATE",
+        "content": case.motivo,
+        "created_at": case.created_at,
+        "user_id": case.creado_por_id,
+        "user_name": creator.nombre if creator else "Usuario",
+        "details": {
+            "servicio": case.servicio_o_plataforma,
+            "prioridad": case.prioridad,
+            "sby_responsable": case.sby_responsable
+        }
+    })
     
     for obs in observations:
         timeline.append({
@@ -330,3 +359,37 @@ async def get_case_timeline(
     timeline.sort(key=lambda x: x["created_at"])
     
     return timeline
+
+
+# ==========================================
+# DELETE CASE - Solo Admin
+# ==========================================
+@router.delete("/{case_id}")
+async def delete_case(
+    case_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.rol != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los administradores pueden eliminar casos"
+        )
+
+    db_case = await session.get(Case, case_id)
+    if not db_case:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+
+    case_codigo = db_case.codigo
+
+    # ✅ DELETE CORRECTO
+    await session.delete(db_case)
+    await session.commit()
+
+    return {
+        "message": f"Caso {case_codigo} eliminado exitosamente",
+        "deleted_case": {
+            "id": case_id,
+            "codigo": case_codigo
+        }
+    }
