@@ -4,7 +4,7 @@ import { LayoutDashboard, PlusCircle, Users, Menu, ChevronLeft, ChevronRight, Co
 import { clsx } from 'clsx';
 import UserMenu from './UserMenu';
 import { CommandPalette } from './ui/CommandPalette';
-
+import APP_VERSION from '../config/version';
 
 export default function Layout() {
     const location = useLocation();
@@ -101,7 +101,7 @@ export default function Layout() {
                 {/* Sidebar Footer */}
                 <div className="p-4 border-t border-vscode-light-border dark:border-vscode-border flex flex-col gap-4">
                     <div className={clsx("flex items-center gap-2", isCollapsed ? "justify-center" : "")}>
-                        <UserMenu isCollapsed={isCollapsed} appVersion="v2.2.3" />
+                        <UserMenu isCollapsed={isCollapsed} appVersion={APP_VERSION} />
                     </div>
                 </div>
             </aside >

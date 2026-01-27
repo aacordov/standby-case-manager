@@ -56,7 +56,10 @@ async def import_cases_with_observations(
     if missing_cols:
         raise HTTPException(status_code=400, detail=f"Missing required columns in casos file: {', '.join(missing_cols)}")
 
-    df_casos.fillna('', inplace=True)
+    # ✅ FIX: Llenar NaN solo en columnas de texto
+    for col in df_casos.columns:
+        if df_casos[col].dtype == 'object':
+            df_casos[col].fillna('', inplace=True)
 
     casos_importados = 0
     casos_actualizados = 0
@@ -183,7 +186,10 @@ async def import_cases_with_observations(
         if missing_cols_obs:
             raise HTTPException(status_code=400, detail=f"Missing required columns in observaciones file: {', '.join(missing_cols_obs)}")
 
-        df_observaciones.fillna('', inplace=True)
+        # ✅ FIX: Llenar NaN solo en columnas de texto
+        for col in df_observaciones.columns:
+            if df_observaciones[col].dtype == 'object':
+                df_observaciones[col].fillna('', inplace=True)
 
         for index, row in df_observaciones.iterrows():
             try:
@@ -274,14 +280,16 @@ async def import_cases(
         raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
 
     # Expected columns validation
-    required_cols = ['codigo', 'servicio_o_plataforma', 'prioridad', 'novedades_y_comentarios']
+    required_cols = ['codigo', 'servicio_o_plataforma', 'prioridad', 'motivo']
     missing_cols = [col for col in required_cols if col not in df.columns]
     
     if missing_cols:
         raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing_cols)}")
 
-    # Fill NaN
-    df.fillna('', inplace=True)
+    # ✅ FIX: Llenar NaN solo en columnas de texto
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col].fillna('', inplace=True)
 
     imported_count = 0
     errors = []
@@ -304,7 +312,7 @@ async def import_cases(
                 servicio_o_plataforma=str(row['servicio_o_plataforma']),
                 prioridad=priority,
                 estado=status,
-                novedades_y_comentarios=str(row['novedades_y_comentarios']),
+                motivo=str(row['motivo']),
                 sby_responsable=str(row.get('sby_responsable', '')),
                 observaciones=str(row.get('observaciones', '')),
                 creado_por_id=current_user.id,
@@ -526,8 +534,8 @@ async def export_cases_with_observations(
         cases_data.append({
             'codigo': case.codigo,
             'servicio_o_plataforma': case.servicio_o_plataforma,
-            'estado': f"CaseStatus.{case.estado.value}",
-            'prioridad': f"Priority.{case.prioridad.value}",
+            'estado': case.estado.value,
+            'prioridad': case.prioridad.value,
             'sby_responsable': case.sby_responsable or '',
             'fecha_inicio': case.fecha_inicio,
             'fecha_fin': case.fecha_fin,
@@ -681,7 +689,10 @@ async def import_complete_excel(
     if missing_cols:
         raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en la hoja 'Casos': {', '.join(missing_cols)}")
 
-    df_casos.fillna('', inplace=True)
+    # ✅ FIX: Llenar NaN solo en columnas de texto, no en numéricas (evita error con float64)
+    for col in df_casos.columns:
+        if df_casos[col].dtype == 'object':  # Solo columnas de texto
+            df_casos[col].fillna('', inplace=True)
 
     casos_importados = 0
     casos_actualizados = 0
@@ -798,7 +809,10 @@ async def import_complete_excel(
         if missing_cols_obs:
             raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas en la hoja 'Observaciones': {', '.join(missing_cols_obs)}")
 
-        df_observaciones.fillna('', inplace=True)
+        # ✅ FIX: Llenar NaN solo en columnas de texto
+        for col in df_observaciones.columns:
+            if df_observaciones[col].dtype == 'object':
+                df_observaciones[col].fillna('', inplace=True)
 
         for index, row in df_observaciones.iterrows():
             try:
@@ -965,7 +979,10 @@ async def import_users(
     if missing_cols:
         raise HTTPException(status_code=400, detail=f"Faltan columnas requeridas: {', '.join(missing_cols)}")
 
-    df_users.fillna('', inplace=True)
+    # ✅ FIX: Llenar NaN solo en columnas de texto
+    for col in df_users.columns:
+        if df_users[col].dtype == 'object':
+            df_users[col].fillna('', inplace=True)
 
     usuarios_importados = 0
     usuarios_actualizados = 0

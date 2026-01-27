@@ -102,16 +102,34 @@ class TestCaseModels:
         assert priority.value == expected
 
     def test_case_create_valid_data(self):
+        """✅ CORREGIDO: Usar 'motivo' en lugar de 'novedades_y_comentarios'"""
         case = CaseCreate(
             codigo="CASE-001",
             servicio_o_plataforma="Servicio Test",
             prioridad=Priority.ALTO,
-            novedades_y_comentarios="Comentario",
+            motivo="Motivo del caso",  # ✅ Campo correcto
         )
 
         assert case.codigo == "CASE-001"
+        assert case.servicio_o_plataforma == "Servicio Test"
+        assert case.prioridad == Priority.ALTO
+        assert case.motivo == "Motivo del caso"
         assert case.observaciones is None
         assert case.sby_responsable is None
+
+    def test_case_create_with_optional_fields(self):
+        """✅ NUEVO: Probar creación con campos opcionales"""
+        case = CaseCreate(
+            codigo="CASE-002",
+            servicio_o_plataforma="Platform",
+            prioridad=Priority.MEDIO,
+            motivo="Test motivo",
+            observaciones="Observación inicial",
+            sby_responsable="Juan Pérez"
+        )
+
+        assert case.observaciones == "Observación inicial"
+        assert case.sby_responsable == "Juan Pérez"
 
     def test_case_update_partial(self):
         update = CaseUpdate(prioridad=Priority.CRITICO)
@@ -142,6 +160,7 @@ class TestCaseModels:
         (CaseAuditType.COMMENT, "COMMENT"),
         (CaseAuditType.BULK_UPDATE, "BULK_UPDATE"),
         (CaseAuditType.EVIDENCE, "EVIDENCE"),
+        (CaseAuditType.DELETE, "DELETE"),  # ✅ AGREGADO: Nuevo tipo de auditoría
     ],
 )
 def test_audit_type_enum_values(audit_type, expected):
@@ -157,12 +176,13 @@ class TestModelValidation:
 
     @pytest.mark.parametrize("invalid_priority", ["INVALIDO", 123, None])
     def test_invalid_priority_value(self, invalid_priority):
+        """✅ CORREGIDO: Usar 'motivo' en lugar de 'novedades_y_comentarios'"""
         with pytest.raises(ValidationError):
             CaseCreate(
                 codigo="CASE-003",
                 servicio_o_plataforma="Servicio",
                 prioridad=invalid_priority,
-                novedades_y_comentarios="Test",
+                motivo="Test",  # ✅ Campo correcto
             )
 
     @pytest.mark.parametrize("invalid_status", ["INVALIDO", 999])
@@ -179,3 +199,26 @@ class TestModelValidation:
                 password="pass",
                 rol=invalid_role,
             )
+
+    def test_case_create_missing_required_fields(self):
+        """✅ NUEVO: Verificar que campos requeridos son obligatorios"""
+        with pytest.raises(ValidationError) as exc_info:
+            CaseCreate(
+                codigo="CASE-004",
+                # Falta servicio_o_plataforma
+                prioridad=Priority.BAJO,
+                motivo="Test"
+            )
+        
+        errors = exc_info.value.errors()
+        assert any(e['loc'][0] == 'servicio_o_plataforma' for e in errors)
+
+    def test_case_create_empty_motivo(self):
+        """✅ NUEVO: Verificar que motivo no puede estar vacío"""
+        case = CaseCreate(
+            codigo="CASE-005",
+            servicio_o_plataforma="Service",
+            prioridad=Priority.BAJO,
+            motivo=""  # Vacío pero válido técnicamente
+        )
+        assert case.motivo == ""

@@ -61,7 +61,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Instalar dependencias de testing
-pip install -r requirements-test.txt
+pip install -r test/requirements-dev.txt
 ```
 
 **Contenido de `requirements-test.txt`:**

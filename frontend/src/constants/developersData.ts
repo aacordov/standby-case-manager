@@ -8,8 +8,8 @@ export const DEVELOPERS: DeveloperProfile[] = [
         bio: 'Apasionado por crear experiencias web increíbles y escalables.',
         avatarUrl: '/images/team/ronny_ortiz.jpg',
         socialLinks: [
-            { platform: 'github', url: 'https://github.com' },
-            { platform: 'linkedin', url: 'https://linkedin.com' }
+            { platform: 'github', url: 'https://github.com/rortiz-09' },
+            { platform: 'linkedin', url: 'https://www.linkedin.com/in/ronnyortiz/' }
         ]
     },
     {
@@ -19,8 +19,8 @@ export const DEVELOPERS: DeveloperProfile[] = [
         bio: 'Especialista en Openshift automatización con Ansible y Sistemas Operativos.',
         avatarUrl: '/images/team/allan_cordova.jpg',
         socialLinks: [
-            { platform: 'github', url: 'https://github.com' },
-            { platform: 'twitter', url: 'https://twitter.com' }
+            { platform: 'github', url: 'https://github.com/aacordov' },
+            { platform: 'linkedin', url: 'https://www.linkedin.com/in/allan-cordova-duque-211279147' }
         ]
     },
     {
@@ -30,8 +30,8 @@ export const DEVELOPERS: DeveloperProfile[] = [
         bio: 'Especialista en arquitecturas robustas y optimización de bases de datos.',
         avatarUrl: '/images/team/jose_briones.jpg',
         socialLinks: [
-            { platform: 'github', url: 'https://github.com' },
-            { platform: 'linkedin', url: 'https://linkedin.com' }
+            { platform: 'github', url: 'https://github.com/josmbrio' },
+            { platform: 'linkedin', url: 'https://www.linkedin.com/in/josemabriones/' }
         ]
     },
     {
@@ -41,8 +41,8 @@ export const DEVELOPERS: DeveloperProfile[] = [
         bio: 'Automatizando todo lo que se mueve. Fanático de Docker y CI/CD.',
         avatarUrl: '/images/team/larry_sanchez.jpg',
         socialLinks: [
-            { platform: 'github', url: 'https://github.com' },
-            { platform: 'website', url: 'https://example.com' }
+            { platform: 'github', url: 'https://github.com/lsancheg' },
+            { platform: 'linkedin', url: 'www.linkedin.com/in/lajasanc' }
         ]
     }
 ];

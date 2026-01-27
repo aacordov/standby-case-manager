@@ -76,6 +76,11 @@ export default function Dashboard() {
 
     const cases = paginatedData?.items || [];
     const totalCases = paginatedData?.total || 0;
+    // Fix contador cuando no hay casos
+    const startCase = totalCases === 0 ? 0 : (page - 1) * itemsPerPage + 1;
+    const endCase =
+        totalCases === 0 ? 0 : Math.min(page * itemsPerPage, totalCases);
+
     const totalPages = paginatedData?.total_pages || 1;
 
     // Resetear a página 1 cuando cambien los filtros
@@ -260,7 +265,11 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                         <Activity size={14} className="text-indigo-500" />
                         <span>
-                            Mostrando {((page - 1) * itemsPerPage) + 1}-{Math.min(page * itemsPerPage, totalCases)} de {totalCases} casos
+                            {
+                                totalCases === 0
+                                    ? "No hay casos para mostrar"
+                                    : `Mostrando ${startCase}-${endCase} de ${totalCases} casos`
+                                }
                         </span>
                     </div>
 

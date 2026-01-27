@@ -1,0 +1,98 @@
+# ==========================================
+# Backend Dockerfile - PRODUCCIÓN
+# ==========================================
+# Multi-stage build para imagen optimizada
+# Código incluido en imagen (inmutable)
+# Usuario no-root por seguridad
+# ==========================================
+
+# ==========================================
+# STAGE 1: Builder
+# ==========================================
+FROM python:3.11-slim AS builder
+
+# Metadata
+LABEL maintainer="Standby Case Manager Team"
+LABEL stage="builder"
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Instalar dependencias de compilación
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar uv para instalación rápida
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Directorio de trabajo
+WORKDIR /build
+
+# Copiar solo requirements para aprovechar cache de Docker
+COPY requirements.txt .
+
+# Instalar dependencias en el sistema (no venv para simplificar)
+RUN uv pip install --system --no-cache -r requirements.txt
+
+# ==========================================
+# STAGE 2: Runtime
+# ==========================================
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="Standby Case Manager Team"
+LABEL version="2.3.0"
+LABEL description="Backend FastAPI - Production Environment"
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/home/appuser/.local/bin:$PATH"
+
+# Instalar solo dependencias de runtime (no build tools)
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario no-root
+RUN useradd -m -u 1000 -s /bin/bash appuser
+
+# Directorio de trabajo
+WORKDIR /app
+
+# Copiar dependencias instaladas del builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copiar código de aplicación
+COPY --chown=appuser:appuser . .
+
+# Crear directorio uploads
+RUN mkdir -p /app/uploads && \
+    chown -R appuser:appuser /app/uploads && \
+    chmod 755 /app/uploads
+
+# Cambiar al usuario no-root
+USER appuser
+
+# Exponer puerto
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl --fail http://localhost:8000/health || exit 1
+
+# Comando de producción: uvicorn con múltiples workers
+# Workers = (2 x CPU cores) + 1
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "4", \
+     "--log-level", "info", \
+     "--access-log", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]

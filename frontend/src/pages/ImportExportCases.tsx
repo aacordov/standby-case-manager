@@ -3,6 +3,7 @@ import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, L
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useToast } from '../context/ToastContext';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/axios';
 
 interface ImportResult {
@@ -29,6 +30,7 @@ export default function ImportExportCases() {
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
     const [userImportResult, setUserImportResult] = useState<ImportResult | null>(null);
     const { showToast } = useToast();
+    const queryClient = useQueryClient();
 
     const handleCompleteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -72,6 +74,10 @@ export default function ImportExportCases() {
             } else {
                 showToast('success', 'Éxito', 'Importación completada exitosamente');
             }
+
+            // ✅ Invalidar cache de casos para que se actualice el dashboard
+            queryClient.invalidateQueries({ queryKey: ['cases'] });
+            queryClient.invalidateQueries({ queryKey: ['stats'] });
 
             setCompleteFile(null);
             const fileInput = document.getElementById('complete-file') as HTMLInputElement;
@@ -117,6 +123,9 @@ export default function ImportExportCases() {
             } else {
                 showToast('success', 'Éxito', 'Usuarios importados exitosamente');
             }
+
+            // ✅ Invalidar cache de usuarios para que se actualice la lista
+            queryClient.invalidateQueries({ queryKey: ['users'] });
 
             setUsersFile(null);
             const fileInput = document.getElementById('users-file') as HTMLInputElement;

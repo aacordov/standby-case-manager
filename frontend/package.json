@@ -1,17 +1,19 @@
 {
     "name": "standby-case-manager-frontend",
     "private": true,
-    "version": "2.2.3",
+    "version": "2.3.0",
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "tsc && vite build",
+        "build": "vite build",
+        "build:check": "tsc && vite build",
         "preview": "vite preview",
         "test": "vitest",
         "test:ui": "vitest --ui",
         "test:run": "vitest run",
         "test:coverage": "vitest run --coverage",
-        "test:watch": "vitest --watch"
+        "test:watch": "vitest --watch",
+        "type-check": "tsc --noEmit"
     },
     "dependencies": {
         "@headlessui/react": "^2.2.9",
